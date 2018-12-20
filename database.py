@@ -1,3 +1,16 @@
+def validate_args(expected_args=[]):
+    def real_decorator(func):
+        def wrapper(self, *args):            
+            if len(args) == len(expected_args):
+                func(self, *args)
+            else:
+                msg = '{} expects {} argument(s)'.format(action, len(expected_args))
+                if len(expected_args) > 0:
+                    msg += ': {}'.format(expected_args)
+                print(msg)
+        return wrapper
+    return real_decorator
+
 class Database:
     def __init__(self):
         self.db = {}
@@ -19,24 +32,30 @@ class Database:
             
         return wrapper
 
+    @validate_args(['name', 'value'])
     @log_transaction_rollback
     def set(self, name, value):        
         self.db[name] = value
 
+    @validate_args(['name'])
     def get(self, name):
         print(self.db.get(name) or 'NULL')
     
+    @validate_args(['name'])
     @log_transaction_rollback
     def delete(self, name):        
         # use pop in case name doesn't exist
         self.db.pop(name, None)
     
+    @validate_args(['value'])
     def count(self, value):        
         print(list(self.db.values()).count(value))
     
+    @validate_args()
     def begin(self):
         self.rollback_queue.append({})
 
+    @validate_args()
     def rollback(self):
         try:
             rollback_state = self.rollback_queue.pop()
@@ -51,33 +70,23 @@ class Database:
         except IndexError:
             print('TRANSACTION NOT FOUND')
     
+    @validate_args()
     def commit(self):
         self.rollback_queue = []
-
-
 
 import sys
 
 db = Database()
 
-class Command:
-    def __init__(self, func, expected_args=[]):
-        self.execute = func
-        self.expected_args = expected_args
-    
-    def validate(self, args):
-        return len(args) == len(self.expected_args)        
-
-# Started with a simple dict of {'SET': db.set, ...} but created the class to include validation
 COMMANDS = {
-    'SET': Command(db.set, ['name', 'value']),
-    'GET': Command(db.get, ['name']),
-    'DELETE': Command(db.delete, ['name']),
-    'COUNT': Command(db.count, ['value']),
-    'BEGIN': Command(db.begin),
-    'ROLLBACK': Command(db.rollback),
-    'COMMIT': Command(db.commit),
-    'END': Command(sys.exit)
+    'SET': db.set,
+    'GET': db.get,
+    'DELETE': db.delete,
+    'COUNT': db.count,
+    'BEGIN': db.begin,
+    'ROLLBACK': db.rollback,
+    'COMMIT': db.commit,
+    'END': sys.exit
 }
 
 while True:
@@ -86,9 +95,8 @@ while True:
     args = line[1:]
     command = COMMANDS.get(action, None)
 
-    if not command:
-        print('{} is not a recognized action'.format(action))
-    elif not command.validate(args):
-        print('{} expects {} argument(s) but received {}'.format(action, command.expected_args, args))
+    if command:
+        command(*args)
     else:
-        command.execute(*args)        
+        print('{} is not a recognized action'.format(action))
+
