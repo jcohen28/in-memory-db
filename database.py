@@ -1,28 +1,30 @@
-def validate_args(expected_args=[]):
-    def real_decorator(func):
-        def wrapper(self, *args):            
-            if len(args) == len(expected_args):
-                func(self, *args)
-            else:
-                msg = '{} expects {} argument(s)'.format(action, len(expected_args))
-                if len(expected_args) > 0:
-                    msg += ': {}'.format(expected_args)
-                print(msg)
-        return wrapper
-    return real_decorator
+
 
 class Database:
     def __init__(self):
         self.db = {}
         self.rollback_queue = []
+        self.value_index = {}
     
+    def validate_args(expected_args=[]):
+        def real_decorator(func):
+            def wrapper(self, *args):
+                if len(args) == len(expected_args):
+                    func(self, *args)
+                else:
+                    msg = '{} expects {} argument(s)'.format(action, len(expected_args))
+                    if len(expected_args) > 0:
+                        msg += ': {}'.format(expected_args)
+                    print(msg)
+            return wrapper
+        return real_decorator
+
     def log_transaction_rollback(func):
         def wrapper(self, name, *args):
-            # If no name is provided the function will print an error message so skip this logic
             # If Rollback Queue is empty that means there are no active transactions
             # If name is already in the current transaction then do not overwrite the original rollback state
             # Otherwise, store the original value for the given name as the rollback state
-            if name and len(self.rollback_queue) > 0 and name not in self.rollback_queue[-1].keys():
+            if len(self.rollback_queue) > 0 and name not in self.rollback_queue[-1].keys():
                 # Note: if the name does not exist yet in the db that means it is getting added new
                 # The rollback_queue will store a value of None, which will then be handled in the rollback function
                 self.rollback_queue[-1][name] = self.db.get(name)
@@ -35,6 +37,8 @@ class Database:
     @validate_args(['name', 'value'])
     @log_transaction_rollback
     def set(self, name, value):        
+        # before updating value, decrement count of original value
+        # then check if new value is already in value_index, if so increment, otherwise add with initial value of 1
         self.db[name] = value
 
     @validate_args(['name'])
@@ -45,6 +49,7 @@ class Database:
     @log_transaction_rollback
     def delete(self, name):        
         # use pop in case name doesn't exist
+        # before deleting record, decrement count of original value
         self.db.pop(name, None)
     
     @validate_args(['value'])
@@ -90,7 +95,7 @@ COMMANDS = {
 }
 
 while True:
-    line = input('>> ').split(' ')
+    line = input('>> ').strip().split(' ')
     action = line[0].upper()
     args = line[1:]
     command = COMMANDS.get(action, None)
@@ -99,4 +104,3 @@ while True:
         command(*args)
     else:
         print('{} is not a recognized action'.format(action))
-
